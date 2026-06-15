@@ -1,0 +1,32 @@
+{* This is the welcome page, you can delete it *}
+
+{block content}
+<div class="page-header">
+	<h1 class="page-title">Customers</h1>
+	<span class="page-count" id="result-count"></span>
+</div>
+
+<div class="toolbar">
+	<input type="search" id="search" placeholder="Search by name or email…" autocomplete="off"/>
+	<select id="sf">
+		<option value="">All statuses</option>
+		<option value="1">Active</option>
+		<option value="0">Inactive</option>
+	</select>
+</div>
+
+<div class="tbl-wrap" id="main-wrap">
+	<table id="mt">
+		<thead>
+		<tr>
+			<th style="width:28px"></th>
+			<th data-col="name">Name <span class="si">↕</span></th>
+			<th data-col="email">Email <span class="si">↕</span></th>
+			<th data-col="is_active" style="width:84px">Status <span class="si">↕</span></th>
+			<th data-col="created_at" style="width:92px">Since <span class="si">↕</span></th>
+		</tr>
+		</thead>
+		<tbody id="tbody"></tbody>
+	</table>
+	<div class="pag" id="cust-pag"></div>
+</div>

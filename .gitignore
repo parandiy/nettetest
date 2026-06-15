@@ -1,0 +1,14 @@
+# Composer dependencies
+/vendor/
+
+# Node.js dependencies
+/node_modules/
+
+# Nette temp files and cache
+/temp/
+
+# Application logs
+/log/
+
+# IDE - PhpStorm / IntelliJ IDEA
+/.idea/

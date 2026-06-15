@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{ifset title}{include title|stripHtml} | {/ifset} Support Panel — Customers</title>
+	<link rel="stylesheet" href="{$basePath}/css/style.css">
+	{asset? 'main.js'}
+</head>
+<body>
+<div n:foreach="$flashes as $flash" n:class="flash, $flash->type">{$flash->message}</div>
+<header class="topbar">
+	<div class="topbar__inner">
+		<a href="#" class="topbar__brand">
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+				<circle cx="9" cy="7" r="4"/>
+				<path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+			</svg>
+			Support Panel
+		</a>
+	</div>
+</header>
+
+<main class="page">
+	{include content}
+</main>
+
+<script src="{$basePath}/js/app.js"></script>
+</body>
+</html>
