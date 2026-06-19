@@ -17,6 +17,20 @@ Installation
 5. mysql -u root -p support_app < db/schema.sql
 6. from project root run: php db/seed.php --nette
 
+Operators emails:
+1. alice@support.local
+2. bob@support.local
+3. carol@support.local
+4. david@support.local
+5. eva@support.local
+6. frank@support.local
+7. grace@support.local
+8. henry@support.local
+9. iris@support.local
+10. jack@support.local
+
+password for all operators: password
+
 
 Architecture overview
 ----------------------
