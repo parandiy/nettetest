@@ -19,6 +19,10 @@
 			</svg>
 			Support Panel
 		</a>
+		<div n:if="$user->isLoggedIn()" class="topbar__user">
+			<span class="topbar__user-name">{$user->getIdentity()->getData()['name'] ?? $user->getIdentity()->getData()['email']}</span>
+			<a href="{link Auth:out}" class="topbar__signout">Sign out</a>
+		</div>
 	</div>
 </header>
 

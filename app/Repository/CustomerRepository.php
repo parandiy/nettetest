@@ -18,7 +18,10 @@ final class CustomerRepository
         $selection = $this->db->table('customers');
 
         if ($filter->q) {
-            $selection->where('name LIKE ?', "%{$filter->q}%");
+            $selection->whereOr([
+                'name LIKE ?' => "%{$filter->q}%",
+                'email LIKE ?' => "%{$filter->q}%",
+            ]);
         }
 
         if ($filter->isActive !== null) {

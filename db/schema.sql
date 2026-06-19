@@ -3,7 +3,7 @@
 --  MySQL 8.0+ / MariaDB 10.6+
 --
 --  Usage:
---    mysql -u root -p support_app < schema.sql
+--    mysql -u root -p support_app < db/schema.sql
 -- =============================================================
 
 CREATE DATABASE IF NOT EXISTS support_app
@@ -11,6 +11,30 @@ CREATE DATABASE IF NOT EXISTS support_app
     COLLATE       utf8mb4_unicode_ci;
 
 USE support_app;
+
+-- =============================================================
+--  operators  (support panel users / authenticated agents)
+-- =============================================================
+CREATE TABLE IF NOT EXISTS operators (
+    id            INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    name          VARCHAR(150)  NOT NULL,
+    email         VARCHAR(255)  NOT NULL,
+    password_hash VARCHAR(255)  NOT NULL,             -- bcrypt via Nette\Security\Passwords
+    role          ENUM('agent', 'senior', 'admin')
+                                NOT NULL DEFAULT 'agent',
+    is_active     TINYINT(1)    NOT NULL DEFAULT 1,
+    created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                         ON UPDATE CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    UNIQUE  KEY uq_operators_email       (email),
+    INDEX       idx_operators_is_active  (is_active)
+
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
 
 -- =============================================================
 --  customers
@@ -41,12 +65,6 @@ CREATE TABLE IF NOT EXISTS customers (
 
 -- =============================================================
 --  activities
---
---  activity_type is stored as an ENUM directly on the column.
---  Pros:  no JOIN needed, values are DB-validated, storage is
---         1–2 bytes (index into the enum list).
---  Cons:  adding a new type requires ALTER TABLE.
---         Acceptable for a small, stable set like this one.
 -- =============================================================
 CREATE TABLE IF NOT EXISTS activities (
     id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -72,13 +90,8 @@ CREATE TABLE IF NOT EXISTS activities (
         ON DELETE CASCADE
         ON UPDATE CASCADE,
 
-    -- covering index: all activities for customer X, newest first
     INDEX idx_activities_customer_date (customer_id, created_at DESC),
-
-    -- for type-filtered queries inside a customer's activity list
     INDEX idx_activities_customer_type (customer_id, activity_type),
-
-    -- for global date-range scans / reports
     INDEX idx_activities_created_at    (created_at)
 
 ) ENGINE=InnoDB
@@ -87,12 +100,12 @@ CREATE TABLE IF NOT EXISTS activities (
 
 
 -- =============================================================
---  comments
+--  comments  — author_name replaced with operator_id FK
 -- =============================================================
 CREATE TABLE IF NOT EXISTS comments (
     id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
     activity_id INT UNSIGNED NOT NULL,
-    author_name VARCHAR(100) NOT NULL,
+    operator_id INT UNSIGNED NOT NULL,                -- who wrote the comment
     body        TEXT         NOT NULL,
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -104,8 +117,14 @@ CREATE TABLE IF NOT EXISTS comments (
         ON DELETE CASCADE
         ON UPDATE CASCADE,
 
-    -- covering index: all comments for activity Y in chronological order
-    INDEX idx_comments_activity_date (activity_id, created_at ASC)
+    CONSTRAINT fk_comments_operator
+        FOREIGN KEY (operator_id)
+        REFERENCES  operators(id)
+        ON DELETE RESTRICT                            -- keep comments if operator deleted
+        ON UPDATE CASCADE,
+
+    INDEX idx_comments_activity_date (activity_id, created_at ASC),
+    INDEX idx_comments_operator      (operator_id)
 
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4

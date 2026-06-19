@@ -33,3 +33,6 @@ di:
 	export:
 		parameters: no
 		tags: no
+
+session:
+    cookieSamesite: Lax

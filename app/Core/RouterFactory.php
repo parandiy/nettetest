@@ -13,10 +13,16 @@ final class RouterFactory
 	public static function createRouter(): RouteList
 	{
 		$router = new RouteList;
+
+        // Auth routes
+        $router->addRoute('sign/in', 'Auth:Sign:in');
+        $router->addRoute('sign/out', 'Auth:Sign:out');
+
 		$router->addRoute('<presenter>/<action>[/<id>]', 'Home:default');
         $router->addRoute('api/customers', 'Api:customers');
         $router->addRoute('api/customers/<id>/activities', 'Api:activities');
         $router->addRoute('api/activities/<activityId>/comments', 'Api:comments');
+        $router->addRoute('api/activities/<activityId>/comments/add', 'Api:addComment');
 		return $router;
 	}
 }

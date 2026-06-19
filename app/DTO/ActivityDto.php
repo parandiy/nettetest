@@ -2,6 +2,7 @@
 
 namespace App\DTO;
 use App\Enum\ActivityType;
+use App\DTO\CommentDto;
 
 final class ActivityDto
 {
@@ -10,6 +11,7 @@ final class ActivityDto
         public ?ActivityType $type,
         public string $details,
         public string $date,
-        public array $lastComment
+        public ?CommentDto $lastComment,
+        public int $commentsCount
     ) {}
 }

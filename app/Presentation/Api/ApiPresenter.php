@@ -27,6 +27,14 @@ final class ApiPresenter extends Presenter
         parent::__construct();
     }
 
+    protected function startup()
+    {
+        parent::startup();
+        if (!$this->getUser()->isLoggedIn()) {
+            $this->redirect('Auth:in');
+        }
+    }
+
     public function actionCustomers(
         ?string $q = null,
         ?string $is_active = null,
@@ -84,20 +92,29 @@ final class ApiPresenter extends Presenter
             $this->error('Method not allowed', 405);
         }
 
-        $activityId = (int)$this->getHttpRequest()->getPost('activityId');
-        $text = trim((string)$this->getHttpRequest()->getPost('text'));
+        $text = trim((string) $this->getHttpRequest()->getPost('text'));
 
         if ($text === '') {
             $this->sendJson([
                 'success' => false,
                 'message' => 'Comment text is required',
             ]);
+            return;
         }
 
-        $comment = $this->commentService->addComment(
-            $activityId,
-            $text
-        );
+        // The comment author is always the currently logged-in operator —
+        // never trust an author/operator id coming from the client.
+        $operatorId = (int) $this->getUser()->getId();
+
+        try {
+            $comment = $this->commentService->addComment($activityId, $operatorId, $text);
+        } catch (\InvalidArgumentException $e) {
+            $this->sendJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+            return;
+        }
 
         $this->sendJson([
             'success' => true,

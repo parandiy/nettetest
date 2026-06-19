@@ -7,7 +7,8 @@ final class CommentDto
 {
     public function __construct(
         public int $id,
-        public string $author,
+        public int $operatorId,
+        public ?string $author,
         public string $body,
         public string $date
     ) {}

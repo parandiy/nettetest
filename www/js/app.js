@@ -1,30 +1,15 @@
-/* ═══════════════════════════════════════════════════════════════════
-       MOCK DATABASE
-       In production every function marked [AJAX] becomes a fetch() call
-       to the corresponding Nette API endpoint.
-    ═══════════════════════════════════════════════════════════════════ */
-const DB = {
-  comments: {
-    101: [{ id:10101, author:'Support Agent', date:'2024-11-06 12:00', body:'Payment confirmed, plan activated.' }],
-    102: [
-      { id:10201, author:'Support Agent', date:'2024-11-03 14:45', body:'Confirmed issue on our end — investigating.' },
-      { id:10202, author:'Alice Johnson',  date:'2024-11-03 15:00', body:'Thanks for the quick response!' },
-      { id:10203, author:'Support Agent', date:'2024-11-04 09:30', body:'Issue resolved — caching bug. Refund issued.' },
-    ],
-    202: [{ id:20201, author:'Billing Bot', date:'2024-10-30 12:01', body:'Receipt emailed to bob@example.com.' }],
-    405: [{ id:40501, author:'Agent',        date:'2024-09-20 16:30', body:'Docs updated, link sent.' }],
-    801: [{ id:80101, author:'Account Mgr',  date:'2024-11-06 09:15', body:'Welcome call scheduled for tomorrow.' }],
-  },
+/**
+ * Shared response handler: redirects to the sign-in page on 401,
+ * otherwise parses JSON normally. Used by every API.* fetch call.
+ */
+function handleAuthRedirect(res) {
+  if (res.status === 401) {
+    window.location.href = '/sign/in';
+    throw new Error('Session expired. Redirecting to sign in…');
+  }
+  return res.json();
+}
 
-  /* Next auto-increment IDs */
-  _nextCommentId: 99000,
-};
-
-/* ═══════════════════════════════════════════════════════════════════
-     SIMULATED API LAYER
-     Each function returns a Promise, simulating network latency.
-     Replace the body of each function with a real fetch() call.
-  ═══════════════════════════════════════════════════════════════════ */
 const API = {
 
   /**
@@ -33,9 +18,8 @@ const API = {
    */
   getCustomers({ q='', isActive='', sort='name', dir='ASC', page=1 } = {}) {
     return fetch(`/api/customers?q=${encodeURIComponent(q)}&is_active=${encodeURIComponent(isActive)}&sort=${encodeURIComponent(sort)}&dir=${encodeURIComponent(dir)}&page=${encodeURIComponent(page)}`)
-        .then(res => res.json())
+        .then(handleAuthRedirect)
         .then(data => {
-          console.log(data);
           if (data.error) throw new Error(data.error);
 
           data.totalPages = Math.max(1, Math.ceil(data.total / data.perPage));
@@ -50,9 +34,8 @@ const API = {
    */
   getActivities(customerId, { type='', q='', page=1 } = {}) {
     return fetch(`/api/customers/${customerId}/activities?type=${encodeURIComponent(type)}&q=${encodeURIComponent(q)}&page=${encodeURIComponent(page)}`)
-    .then(res => res.json())
+    .then(handleAuthRedirect)
     .then(data => {
-      console.log(data);
       if (data.error) throw new Error(data.error);
 
       /* Available types for filter dropdown */
@@ -68,9 +51,8 @@ const API = {
    */
   getComments(activityId) {
     return fetch(`/api/activities/${activityId}/comments`)
-    .then(res => res.json())
+    .then(handleAuthRedirect)
     .then(data => {
-      console.log(data);
       if (data.error) throw new Error(data.error);
 
       return data;
@@ -78,46 +60,24 @@ const API = {
   },
 
   /**
-   * [AJAX] POST /api/activities/:id/comments
-   * body: { body: string }
+   * [AJAX] POST /api/activities/:id/comments/add
    */
   postComment(activityId, body) {
-    return delay(300, () => {
-      if (!body.trim()) throw new Error('Comment cannot be empty.');
-      const comment = {
-        id:     DB._nextCommentId++,
-        author: 'Operator',
-        date:   nowStr(),
-        body:   body.trim(),
-      };
-      if (!DB.comments[activityId]) DB.comments[activityId] = [];
-      DB.comments[activityId].push(comment);
+    const params = new URLSearchParams();
+    params.set('text', body);
 
-      /* Also update preview on cached activity row */
-      Object.values(DB.activities).forEach(list =>
-          list.forEach(a => {
-            if (a.id === activityId) {
-              a.commentCount = (a.commentCount || 0) + 1;
-              a.lastComment  = comment;
-            }
-          })
-      );
-      return { ok: true, comment };
-    });
+    return fetch(`/api/activities/${activityId}/comments/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+    })
+      .then(handleAuthRedirect)
+      .then(data => {
+        if (!data.success) throw new Error(data.message || 'Failed to post comment.');
+        return { ok: true, comment: data.comment };
+      });
   },
 };
-
-/** Simulates network delay. fn() throws → Promise rejects */
-function delay(ms, fn) {
-  return new Promise((resolve, reject) =>
-      setTimeout(() => { try { resolve(fn()); } catch(e) { reject(e); } }, ms)
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-     APP STATE
-  ═══════════════════════════════════════════════════════════════════ */
-const TL = { login:'Login', purchase:'Purchase', ticket:'Support ticket', reset:'Password reset', update:'Profile update' };
 
 let custState = { q:'', isActive:'', sort:'name', dir:'ASC', page:1 };
 let openId    = null;
@@ -149,13 +109,42 @@ function chevronSVG() {
   return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
 }
 
-function renderPagBtns(current, total, onPage) {
+/**
+ * Pagination buttons
+ */
+function renderPagBtns(current, total, siblings = 1) {
   if (total <= 1) return '';
-  const pages = [];
-  for (let i = 1; i <= total; i++) pages.push(i);
-  return pages.map(n =>
-      `<button class="pag-btn${n===current?' active':''}" data-pg="${n}">${n}</button>`
-  ).join('');
+
+  // Small page counts: just show them all, no need to compress.
+  const MAX_VISIBLE = 7;
+  if (total <= MAX_VISIBLE) {
+    const all = [];
+    for (let i = 1; i <= total; i++) all.push(i);
+    return all.map(n => pagBtnHtml(n, current)).join('');
+  }
+
+  const pages = new Set([1, total]);
+  for (let i = current - siblings; i <= current + siblings; i++) {
+    if (i >= 1 && i <= total) pages.add(i);
+  }
+
+  const sorted = [...pages].sort((a, b) => a - b);
+  let html = '';
+  let prev = null;
+
+  for (const n of sorted) {
+    if (prev !== null && n - prev > 1) {
+      html += `<span class="pag-ellipsis">…</span>`;
+    }
+    html += pagBtnHtml(n, current);
+    prev = n;
+  }
+
+  return html;
+}
+
+function pagBtnHtml(n, current) {
+  return `<button class="pag-btn${n === current ? ' active' : ''}" data-pg="${n}">${n}</button>`;
 }
 
 function skeletonRows(n = 3) {
@@ -169,9 +158,6 @@ function skeletonRows(n = 3) {
   ).join('');
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-     CUSTOMER TABLE
-  ═══════════════════════════════════════════════════════════════════ */
 function showTableSpinner(show) {
   const wrap = document.getElementById('main-wrap');
   const existing = wrap.querySelector('.tbl-loading');
@@ -274,9 +260,6 @@ function renderCustPag(current, perPage, total, totalRows) {
   });
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-     CUSTOMER DETAIL  (lazy-loaded on first open)
-  ═══════════════════════════════════════════════════════════════════ */
 function toggleCustomer(id, customers) {
   const wasOpen = openId === id;
   openId = wasOpen ? null : id;
@@ -324,9 +307,6 @@ async function loadCustomerDetail(customer, scrollTo = false) {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-     ACTIVITY SUB-TABLE  (reloaded on filter/page change)
-  ═══════════════════════════════════════════════════════════════════ */
 async function loadActivities(customerId) {
   const container = document.getElementById('act-section-' + customerId);
   if (!container) return;
@@ -361,14 +341,14 @@ function renderActivities(customerId, res) {
   const s = getActState(customerId);
 
   const typeOpts = res.allTypes.map(t =>
-      `<option value="${t}"${s.type===t?' selected':''}>${esc(TL[t]||t)}</option>`
+      `<option value="${t}"${s.type===t?' selected':''}>${esc(t)}</option>`
   ).join('');
 
   const rows = res.items.length
       ? res.items.map(a => `
       <tr>
         <td class="at-date">${esc(a.date)}</td>
-        <td class="at-tc"><span class="atype tp-${a.type}">${esc(TL[a.type]||a.type)}</span></td>
+        <td class="at-tc"><span class="atype tp-${a.type}">${esc(a.type)}</span></td>
         <td class="at-dc"><span class="at-det">${esc(a.details)}</span></td>
         ${renderCommentCell(a)}
       </tr>`).join('')
@@ -415,6 +395,12 @@ function renderActivities(customerId, res) {
     });
   });
 
+  const textInput = container.querySelector('.act-filters input[data-key="q"]');
+  textInput.focus();
+  const endOfText = textInput.value.length;
+  textInput.setSelectionRange(endOfText, endOfText);
+
+
   /* Bind activity pagination */
   container.querySelectorAll('.pag-btn[data-cid][data-pg]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -438,7 +424,7 @@ function renderActivities(customerId, res) {
 
 function renderCommentCell(activity) {
   const last  = activity.lastComment;
-  const count = activity.commentCount || 0;
+  const count = activity.commentsCount || 0;
 
   if (!last) {
     return `<td class="cc-td">
@@ -583,8 +569,7 @@ function refreshActivityCommentCell(activityId, latestComment) {
   const td = btn.closest('td.cc-td');
   if (!td) return;
 
-  /* Rebuild count from DB */
-  const count = (DB.comments[activityId] || []).length;
+  const count = 0;
 
   td.innerHTML = `<div class="cc-inner">
     <div class="cc-preview">${esc(latestComment.body)}</div>

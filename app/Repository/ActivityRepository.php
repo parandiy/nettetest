@@ -12,7 +12,8 @@ use Nette\Database\Explorer;
 final class ActivityRepository
 {
     public function __construct(
-        private readonly Explorer $db
+        private readonly Explorer $db,
+        private readonly CommentRepository $commentRepository,
     ) {
     }
 
@@ -35,21 +36,28 @@ final class ActivityRepository
             ->order('created_at DESC')
             ->limit($limit, $offset);
 
-        $lastComment = [
-            'id' => 10101,
-            'author' => 'Support Agent',
-            'date' => '2024-11-06 12:00',
-            'body' => 'Payment confirmed, plan activated.'
-        ]; // TEMP TEMP
+        $activitiesData = $selection->fetchAll();
+
+        $activityIds = array_map(
+            fn($row) => $row->id,
+            $activitiesData
+        );
+
+        $lastComments = $this->commentRepository
+            ->findLastCommentsForActivities($activityIds);
+
+        $commentsCount = $this->commentRepository
+            ->countCommentsForActivities($activityIds);
 
         $items = [];
-        foreach ($selection->fetchAll() as $row) {
+        foreach ($activitiesData as $row) {
             $items[] = new ActivityDto(
                 id: $row->id,
                 type: ActivityType::tryFrom($row->activity_type ?? '') ?? null,
                 details: $row->details,
                 date: $row->created_at->format('Y-m-d H:i:s'),
-                lastComment: $lastComment,
+                lastComment: $lastComments[$row->id] ?? null,
+                commentsCount: $commentsCount[$row->id] ?? 0,
             );
         }
 
